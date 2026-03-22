@@ -1,0 +1,622 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Container & Cloud Quiz</title>
+<script src="/socket.io/socket.io.js"></script>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+  * { margin:0; padding:0; box-sizing:border-box; }
+
+  body {
+    font-family: 'Inter', sans-serif;
+    background: #f5f5f0;
+    color: #1a1a1a;
+    min-height: 100vh;
+  }
+
+  /* ── TOPBAR ── */
+  .topbar {
+    background: #fff;
+    border-bottom: 1px solid #e8e8e4;
+    padding: 14px 24px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    position: sticky; top: 0; z-index: 100;
+  }
+  .topbar-title { font-size: 14px; font-weight: 600; }
+  .topbar-sub { font-size: 11px; color: #999; margin-top: 1px; }
+  .online-badge {
+    font-size: 12px; font-weight: 500; color: #2d6a4f;
+    background: #d8f3dc; padding: 4px 12px; border-radius: 99px;
+  }
+
+  .progress-bar-wrap { background: #fff; border-bottom: 1px solid #e8e8e4; padding: 0 24px 12px; }
+  .progress-track { height: 3px; background: #e8e8e4; border-radius: 99px; overflow: hidden; }
+  .progress-fill { height: 100%; background: #2d6a4f; border-radius: 99px; transition: width 0.4s; }
+
+  /* ── LAYOUT ── */
+  .layout {
+    display: grid;
+    grid-template-columns: 1fr 280px;
+    gap: 24px;
+    max-width: 960px;
+    margin: 0 auto;
+    padding: 28px 24px 80px;
+  }
+  @media (max-width: 720px) {
+    .layout { grid-template-columns: 1fr; }
+    .sidebar { order: -1; }
+  }
+
+  /* ── SCREENS ── */
+  .screen { display: none; }
+  .screen.active { display: block; }
+
+  /* ── JOIN SCREEN ── */
+  #join-screen {
+    display: flex; align-items: center; justify-content: center;
+    min-height: calc(100vh - 60px);
+    padding: 24px;
+  }
+  .join-card {
+    background: #fff; border: 1px solid #e8e8e4; border-radius: 14px;
+    padding: 40px 36px; max-width: 420px; width: 100%; text-align: center;
+  }
+  .join-icon { font-size: 36px; margin-bottom: 16px; }
+  .join-title { font-size: 20px; font-weight: 600; margin-bottom: 6px; }
+  .join-sub { font-size: 13px; color: #888; margin-bottom: 28px; line-height: 1.5; }
+  .join-input {
+    width: 100%; padding: 12px 16px; font-size: 15px; font-family: 'Inter', sans-serif;
+    border: 1px solid #e8e8e4; border-radius: 8px; outline: none;
+    background: #fafaf7; margin-bottom: 12px; text-align: center;
+    transition: border-color 0.15s;
+  }
+  .join-input:focus { border-color: #52b788; }
+  .join-btn {
+    width: 100%; padding: 12px; font-size: 14px; font-weight: 600;
+    font-family: 'Inter', sans-serif; background: #2d6a4f; color: #fff;
+    border: none; border-radius: 8px; cursor: pointer; transition: background 0.15s;
+  }
+  .join-btn:hover { background: #245d44; }
+  .join-info {
+    margin-top: 20px; font-size: 12px; color: #bbb; line-height: 1.6;
+  }
+
+  /* ── QUIZ AREA ── */
+  .quiz-area {}
+
+  .stat-row { display: flex; gap: 8px; margin-bottom: 18px; flex-wrap: wrap; }
+  .pill { font-size: 12px; padding: 5px 12px; border-radius: 99px; font-weight: 500; }
+  .pill-q { background: #efefeb; color: #555; }
+  .pill-c { background: #d8f3dc; color: #2d6a4f; }
+  .pill-w { background: #fde8e8; color: #c0392b; }
+  .pill-name { background: #e8eaf6; color: #3949ab; }
+
+  .card {
+    background: #fff; border: 1px solid #e8e8e4; border-radius: 12px; padding: 26px;
+  }
+  .q-type { font-size: 11px; font-weight: 500; text-transform: uppercase; letter-spacing: 1px; color: #999; margin-bottom: 12px; }
+  .scenario {
+    background: #f9f9f6; border-left: 3px solid #b7ddc8;
+    border-radius: 0 8px 8px 0; padding: 13px 15px;
+    font-size: 13px; line-height: 1.65; color: #444; margin-bottom: 18px;
+  }
+  .q-text { font-size: 15px; font-weight: 600; line-height: 1.5; margin-bottom: 18px; }
+
+  .options { display: flex; flex-direction: column; gap: 8px; }
+  .opt {
+    display: flex; align-items: flex-start; gap: 12px;
+    padding: 11px 15px; border: 1px solid #e8e8e4; border-radius: 8px;
+    cursor: pointer; font-size: 13.5px; line-height: 1.5; color: #333;
+    background: #fafaf7; transition: border-color 0.15s, background 0.15s;
+  }
+  .opt:hover:not(.locked) { border-color: #b7ddc8; background: #f2fbf5; }
+  .opt-letter {
+    min-width: 22px; height: 22px; border-radius: 6px; background: #efefeb;
+    color: #888; font-size: 11px; font-weight: 600;
+    display: flex; align-items: center; justify-content: center;
+    flex-shrink: 0; margin-top: 1px;
+  }
+  .opt.correct { border-color: #52b788; background: #f0faf4; }
+  .opt.correct .opt-letter { background: #52b788; color: #fff; }
+  .opt.selected-wrong { border-color: #e07070; background: #fff5f5; }
+  .opt.selected-wrong .opt-letter { background: #e07070; color: #fff; }
+  .opt.locked { cursor: default; }
+
+  .explanation {
+    margin-top: 14px; background: #f0faf4; border: 1px solid #b7ddc8;
+    border-radius: 8px; padding: 13px 15px; font-size: 13px; line-height: 1.65;
+    color: #2d6a4f; display: none;
+  }
+  .explanation.show { display: block; }
+
+  .btn-row { display: flex; gap: 10px; margin-top: 18px; }
+  .btn {
+    font-family: 'Inter', sans-serif; font-size: 13px; font-weight: 500;
+    padding: 10px 20px; border-radius: 8px; border: 1px solid transparent;
+    cursor: pointer; transition: all 0.15s;
+  }
+  .btn-primary { background: #2d6a4f; color: #fff; border-color: #2d6a4f; }
+  .btn-primary:hover { background: #245d44; }
+  .btn-ghost { background: transparent; border-color: #e8e8e4; color: #888; }
+  .btn-ghost:hover { border-color: #bbb; color: #555; }
+
+  /* ── SIDEBAR / LEADERBOARD ── */
+  .sidebar {}
+  .lb-card {
+    background: #fff; border: 1px solid #e8e8e4; border-radius: 12px;
+    overflow: hidden; position: sticky; top: 80px;
+  }
+  .lb-header {
+    padding: 14px 18px; border-bottom: 1px solid #e8e8e4;
+    font-size: 13px; font-weight: 600; display: flex; align-items: center; gap: 8px;
+  }
+  .lb-live {
+    width: 8px; height: 8px; border-radius: 50%; background: #52b788;
+    animation: pulse 2s infinite;
+  }
+  @keyframes pulse {
+    0%, 100% { opacity: 1; }
+    50% { opacity: 0.4; }
+  }
+  .lb-list { max-height: 420px; overflow-y: auto; }
+  .lb-empty { padding: 24px; text-align: center; font-size: 13px; color: #bbb; }
+  .lb-row {
+    display: flex; align-items: center; gap: 10px;
+    padding: 10px 18px; border-bottom: 1px solid #f0f0ea;
+    transition: background 0.2s;
+  }
+  .lb-row:last-child { border-bottom: none; }
+  .lb-row.me { background: #f0faf4; }
+  .lb-rank {
+    font-size: 12px; font-weight: 600; width: 22px; text-align: center;
+    color: #bbb; flex-shrink: 0;
+  }
+  .lb-rank.gold { color: #d4a017; }
+  .lb-rank.silver { color: #9e9e9e; }
+  .lb-rank.bronze { color: #a0522d; }
+  .lb-name { font-size: 13px; font-weight: 500; flex: 1; min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .lb-score { font-size: 13px; font-weight: 600; color: #2d6a4f; flex-shrink: 0; }
+  .lb-done { font-size: 10px; color: #52b788; margin-left: 4px; }
+  .lb-pending { font-size: 10px; color: #bbb; }
+
+  /* ── RESULT SCREEN ── */
+  #result-screen { display: none; }
+  .result-card {
+    background: #fff; border: 1px solid #e8e8e4; border-radius: 12px;
+    padding: 40px 28px; text-align: center;
+  }
+  .result-score { font-size: 56px; font-weight: 600; line-height: 1; margin-bottom: 4px; }
+  .result-label { font-size: 13px; color: #999; margin-bottom: 8px; }
+  .result-name { font-size: 16px; font-weight: 600; margin-bottom: 28px; }
+  .result-breakdown { display: flex; justify-content: center; gap: 12px; margin-bottom: 24px; flex-wrap: wrap; }
+  .rb { background: #f9f9f6; border: 1px solid #e8e8e4; border-radius: 10px; padding: 14px 20px; min-width: 80px; }
+  .rb-val { font-size: 26px; font-weight: 600; }
+  .rb-label { font-size: 11px; color: #999; margin-top: 2px; }
+  .result-msg { font-size: 14px; color: #555; margin-bottom: 24px; line-height: 1.6; max-width: 340px; margin-left: auto; margin-right: auto; }
+  .result-rank-box {
+    background: #f0faf4; border: 1px solid #b7ddc8; border-radius: 10px;
+    padding: 14px 20px; margin-bottom: 24px; font-size: 14px; color: #2d6a4f; font-weight: 500;
+  }
+</style>
+</head>
+<body>
+
+<!-- TOPBAR -->
+<div class="topbar">
+  <div>
+    <div class="topbar-title">📦 Containerization Quiz</div>
+    <div class="topbar-sub">Docker · Kubernetes · Cloud-Native</div>
+  </div>
+  <span class="online-badge" id="online-count">● 0 online</span>
+</div>
+<div class="progress-bar-wrap">
+  <div class="progress-track">
+    <div class="progress-fill" id="progress-fill" style="width:0%"></div>
+  </div>
+</div>
+
+<!-- JOIN SCREEN -->
+<div id="join-screen">
+  <div class="join-card">
+    <div class="join-icon">🎯</div>
+    <div class="join-title">Join the Exam</div>
+    <div class="join-sub">Enter your name to start the quiz.<br>Your score will appear on the live leaderboard.</div>
+    <input class="join-input" id="name-input" type="text" placeholder="Your name" maxlength="24" autocomplete="off" />
+    <button class="join-btn" id="join-btn" onclick="joinQuiz()">Start Exam →</button>
+    <div class="join-info">20 questions · scenario-based · results ranked live</div>
+  </div>
+</div>
+
+<!-- QUIZ LAYOUT -->
+<div class="layout" id="quiz-layout" style="display:none;">
+  <!-- LEFT: Quiz -->
+  <div class="quiz-area" id="quiz-screen">
+    <div class="stat-row">
+      <span class="pill pill-name" id="pill-name">—</span>
+      <span class="pill pill-q" id="pill-q">Question 1 of 20</span>
+      <span class="pill pill-c" id="pill-c">✓ 0</span>
+      <span class="pill pill-w" id="pill-w">✗ 0</span>
+    </div>
+    <div class="card">
+      <div class="q-type" id="q-type"></div>
+      <div class="scenario" id="scenario-box"></div>
+      <div class="q-text" id="q-text"></div>
+      <div class="options" id="options"></div>
+      <div class="explanation" id="explanation"></div>
+      <div class="btn-row">
+        <button class="btn btn-primary" id="btn-next" onclick="nextQuestion()" style="display:none">Next →</button>
+        <button class="btn btn-ghost" onclick="skipQuestion()" id="btn-skip">Skip</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- RIGHT: Result after finish -->
+  <div id="result-screen">
+    <div class="result-card">
+      <div class="result-score" id="result-score">—</div>
+      <div class="result-label">out of 20</div>
+      <div class="result-name" id="result-name"></div>
+      <div class="result-rank-box" id="result-rank-box">Calculating rank...</div>
+      <div class="result-breakdown">
+        <div class="rb"><div class="rb-val" style="color:#2d6a4f" id="rb-c">0</div><div class="rb-label">Correct</div></div>
+        <div class="rb"><div class="rb-val" style="color:#c0392b" id="rb-w">0</div><div class="rb-label">Wrong</div></div>
+        <div class="rb"><div class="rb-val" style="color:#aaa" id="rb-s">0</div><div class="rb-label">Skipped</div></div>
+      </div>
+      <div class="result-msg" id="result-msg"></div>
+      <button class="btn btn-primary" onclick="restartQuiz()" style="font-size:13px;padding:10px 28px;">Retake Exam</button>
+    </div>
+  </div>
+
+  <!-- SIDEBAR: Leaderboard -->
+  <div class="sidebar">
+    <div class="lb-card">
+      <div class="lb-header">
+        <span class="lb-live"></span>
+        Live Leaderboard
+      </div>
+      <div class="lb-list" id="lb-list">
+        <div class="lb-empty">Waiting for players...</div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+// ── QUESTIONS ──────────────────────────────────────────────
+const questions = [
+  {
+    type:"Scenario",
+    scenario:"Maria just finished building a Python Flask app on her laptop. She says, \"It works on my machine!\" — but the app crashes on the production server because of a different Python version and missing libraries.",
+    question:"What technology should Maria use to package her app so it runs the same way everywhere?",
+    options:["Virtual Machine","Containers (e.g., Docker)","FTP file transfer","SSH remote access"],
+    answer:1,
+    explanation:"✓ Containers package application code, libraries, runtime dependencies, and system tools together into a single portable unit — ensuring the app behaves identically on any system."
+  },
+  {
+    type:"Command",
+    scenario:"Carlo just installed Docker and wants to verify it's working correctly by running a simple official test image.",
+    question:"Which command should Carlo run to test his Docker installation?",
+    options:["docker start hello-world","docker run hello-world","docker pull test","docker check --status"],
+    answer:1,
+    explanation:"✓ docker run hello-world downloads the hello-world image from Docker Hub and runs it. This is the standard first command to verify Docker is installed correctly."
+  },
+  {
+    type:"Concept",
+    scenario:"A team is designing a large e-commerce platform with separate components for users, payments, products, and orders — each with its own database and API, deployed independently.",
+    question:"What architectural pattern are they implementing?",
+    options:["Monolithic architecture","Peer-to-peer networking","Microservices architecture","Virtual machine clustering"],
+    answer:2,
+    explanation:"✓ Microservices architecture divides applications into smaller, independent services that can be developed, deployed, and scaled separately — each with its own database and API."
+  },
+  {
+    type:"Command",
+    scenario:"Jess has a running Docker container named python-container. She needs to stop it before updating the application code and rebuilding the image.",
+    question:"Which command correctly stops the running container by name?",
+    options:["docker kill python-container","docker stop python-container","docker rm python-container","docker pause python-container"],
+    answer:1,
+    explanation:"✓ docker stop python-container sends a graceful stop signal (SIGTERM). docker kill force-stops it instantly, and docker rm deletes it entirely."
+  },
+  {
+    type:"Dockerfile",
+    scenario:"Ben is writing a Dockerfile for his Python Flask app. He includes the line EXPOSE 5000. His classmate asks what that instruction actually does.",
+    question:"What is the correct purpose of EXPOSE 5000 in a Dockerfile?",
+    options:["Opens port 5000 on the host machine automatically","Informs Docker that the container app listens on port 5000","Blocks all other ports except 5000","Maps host port 5000 to the container port"],
+    answer:1,
+    explanation:"✓ EXPOSE 5000 is a documentation instruction — it tells Docker which port the app uses inside the container. Publishing to the host requires the -p flag in docker run."
+  },
+  {
+    type:"Kubernetes",
+    scenario:"A company's web app runs in Kubernetes with 2 replicas. During a product launch, traffic spikes 10x. The DevOps team needs more instances running immediately.",
+    question:"Which kubectl command scales the deployment to 4 replicas?",
+    options:["kubectl create replicas=4","kubectl update deployment --count=4","kubectl scale deployment python-deployment --replicas=4","kubectl add pods 4 python-deployment"],
+    answer:2,
+    explanation:"✓ kubectl scale deployment python-deployment --replicas=4 tells Kubernetes to bring the pod count to 4. It automatically creates and schedules the additional pods."
+  },
+  {
+    type:"Comparison",
+    scenario:"An IT professor compares VMs and Containers. VMs take minutes to start, containers take seconds. A student asks why containers start so much faster.",
+    question:"What is the main reason containers start faster than Virtual Machines?",
+    options:["Containers use faster CPUs","Containers share the host OS kernel instead of booting a full guest OS","Containers skip network setup","Containers always run on SSDs"],
+    answer:1,
+    explanation:"✓ Containers share the host OS kernel, so they don't boot an entire guest OS. This makes them much lighter (MBs vs GBs) and able to start in seconds instead of minutes."
+  },
+  {
+    type:"Command",
+    scenario:"Nico deployed a Flask app in Docker. He wants to run it in the background and give it a readable name so he can manage it easily later.",
+    question:"Which command runs the container in detached mode with the name 'python-container'?",
+    options:["docker run python-k8s-app --background --name python-container","docker run -d -p 5000:5000 --name python-container python-k8s-app","docker start -d python-k8s-app","docker run -bg --name python-container python-k8s-app"],
+    answer:1,
+    explanation:"✓ docker run -d -p 5000:5000 --name python-container python-k8s-app — the -d flag runs it detached (background), -p maps the port, and --name assigns a readable name."
+  },
+  {
+    type:"Kubernetes",
+    scenario:"A pod named api-pod-xyz in production is not responding. The operations team needs to read what the application was outputting — without restarting the pod.",
+    question:"Which kubectl command retrieves the pod's application output logs?",
+    options:["kubectl describe pod api-pod-xyz","kubectl status pod api-pod-xyz","kubectl logs api-pod-xyz","kubectl inspect api-pod-xyz"],
+    answer:2,
+    explanation:"✓ kubectl logs POD_NAME retrieves the standard output from a pod's container. kubectl describe pod POD_NAME shows detailed events — both are useful for debugging."
+  },
+  {
+    type:"Concept",
+    scenario:"A startup's payment service crashes at 2 AM. No one is awake to restart it. But within 30 seconds, it's back online automatically — and the engineers credit Kubernetes.",
+    question:"Which Kubernetes feature automatically restarted the crashed payment service?",
+    options:["Auto-scaling","Self-healing containers","Rolling updates","Load balancing"],
+    answer:1,
+    explanation:"✓ Self-healing is a core Kubernetes feature. When a container crashes, the orchestrator automatically restarts it or schedules a replacement — ensuring availability without manual intervention."
+  },
+  {
+    type:"Concept",
+    scenario:"Andrea builds a Docker image and wants to share it with her entire team globally. She needs a centralized place to store, version, and distribute the image so anyone can download it.",
+    question:"What is the term for this centralized image storage service?",
+    options:["Dockerfile","Docker Container","Docker Registry (e.g., Docker Hub)","Kubernetes Cluster"],
+    answer:2,
+    explanation:"✓ A Docker Registry stores and distributes container images. Docker Hub is the most popular public registry. Others include Amazon ECR, Google Container Registry, and Harbor."
+  },
+  {
+    type:"YAML Config",
+    scenario:"Ramon writes a service.yaml to expose his Flask app. The app runs on port 5000 inside containers, and he wants it reachable externally via nodePort 30007.",
+    question:"In service.yaml, what does targetPort: 5000 refer to?",
+    options:["The external port users type in their browser","The port on the Kubernetes node","The port inside the container where the app is running","The port used by the Kubernetes API server"],
+    answer:2,
+    explanation:"✓ targetPort is the port inside the container where the app listens (Flask uses 5000). The port field is what clients connect to, and nodePort is the external port on the Kubernetes node."
+  },
+  {
+    type:"Comparison",
+    scenario:"Two classmates debate: Student A says containers are better for everything. The professor asks for a scenario where VMs are the right choice instead.",
+    question:"When would a Virtual Machine be more appropriate than a container?",
+    options:["Running a stateless web API that needs rapid scaling","Deploying a microservice with its own database","Running a legacy app that requires full OS isolation and complete hardware virtualization","Building a cloud-native app with separate microservices"],
+    answer:2,
+    explanation:"✓ VMs are still preferred for full OS isolation and legacy systems requiring complete hardware virtualization. They provide stronger security boundaries when apps need their own guest OS."
+  },
+  {
+    type:"Concept",
+    scenario:"A software team has a fully automated pipeline. When a developer pushes code to GitHub, it automatically builds a Docker image, pushes it to a registry, and deploys to Kubernetes — no manual steps.",
+    question:"What type of automation pipeline does this describe?",
+    options:["FTP deployment pipeline","CI/CD pipeline (Continuous Integration / Continuous Deployment)","Manual build and release workflow","VM provisioning workflow"],
+    answer:1,
+    explanation:"✓ This is a CI/CD pipeline. Continuous Integration builds and tests code automatically, while Continuous Deployment releases changes to production — ensuring rapid and reliable delivery."
+  },
+  {
+    type:"Command",
+    scenario:"During debugging, a developer runs docker ps and sees no output. She suspects her container stopped or was never created, and wants to check all containers including stopped ones.",
+    question:"What command shows ALL containers, including stopped ones?",
+    options:["docker ps --all-containers","docker list stopped","docker ps -a","docker containers --show-stopped"],
+    answer:2,
+    explanation:"✓ docker ps -a lists all containers including stopped ones. Plain docker ps only shows currently running containers. The -a flag stands for 'all'."
+  },
+  {
+    type:"Kubernetes",
+    scenario:"Gab deployed his Python app to Kubernetes with imagePullPolicy: Never in his deployment.yaml. His classmate asks why this setting is needed in their local Minikube environment.",
+    question:"What does imagePullPolicy: Never tell Kubernetes to do?",
+    options:["Delete the image after running","Always download the latest image from Docker Hub","Use only the locally built image and never pull from an external registry","Prevent the container from starting"],
+    answer:2,
+    explanation:"✓ imagePullPolicy: Never tells Kubernetes to use only locally available images and never pull from an external registry. Essential in Minikube where images are built locally."
+  },
+  {
+    type:"Concept",
+    scenario:"A cloud app's traffic surges every day at 12 PM and drops at 3 PM. The team wants the system to automatically add containers at noon and remove them at 3 PM — no manual commands needed.",
+    question:"Which Kubernetes feature handles automatic container scaling based on demand?",
+    options:["Rolling updates","Pod scheduling","Horizontal Pod Autoscaling (Auto-Scaling)","Service discovery"],
+    answer:2,
+    explanation:"✓ Auto-Scaling (Horizontal Pod Autoscaling) automatically increases or decreases running pods based on metrics like CPU usage. New pods are created during peaks and removed during low traffic."
+  },
+  {
+    type:"Scenario",
+    scenario:"Lena deployed her Flask app to Kubernetes via Minikube. She applied her service.yaml with nodePort: 30007. Now she needs to find the correct IP address to open the app in her browser.",
+    question:"Which command gives Lena the IP address of her Minikube cluster?",
+    options:["kubectl get ip","minikube ip","kubectl cluster-ip","docker network inspect minikube"],
+    answer:1,
+    explanation:"✓ minikube ip returns the IP address of the Minikube VM. The full URL to access the app is http://MINIKUBE_IP:30007 — combining the Minikube IP with the NodePort."
+  },
+  {
+    type:"Isolation",
+    scenario:"Two Docker containers run on the same server. App A uses Python 3.8 and App B requires Python 3.11. Both run simultaneously without any conflicts or dependency issues.",
+    question:"Which containerization feature makes this possible?",
+    options:["Load balancing","Isolation using Linux namespaces and control groups (cgroups)","Docker Hub registry access","Kubernetes pod scheduling"],
+    answer:1,
+    explanation:"✓ Containers use Linux namespaces and cgroups to isolate applications from each other. Each container has its own isolated environment — so different Python versions coexist without interference."
+  },
+  {
+    type:"Scenario",
+    scenario:"Miguel's Flask app is running in Kubernetes on his local machine. He wants to share it with people outside his network — giving anyone on the internet access via a public URL.",
+    question:"Which tool mentioned in the course materials creates a public tunnel to the local Kubernetes service?",
+    options:["kubectl expose","Minikube dashboard","ngrok","Docker Hub port forwarding"],
+    answer:2,
+    explanation:"✓ ngrok creates a secure public tunnel to a local service. After running ngrok http 30007, it generates a public HTTPS URL that forwards traffic to the local Kubernetes NodePort."
+  }
+];
+
+// ── SOCKET.IO ──────────────────────────────────────────────
+const socket = io();
+let myName = '';
+let mySocketId = '';
+let currentLb = [];
+
+socket.on('connect', () => { mySocketId = socket.id; });
+
+socket.on('leaderboard', (lb) => {
+  currentLb = lb;
+  renderLeaderboard(lb);
+  document.getElementById('online-count').textContent = `● ${lb.length} online`;
+  // Update rank box on result screen
+  updateRankBox(lb);
+});
+
+function renderLeaderboard(lb) {
+  const list = document.getElementById('lb-list');
+  if (!lb.length) { list.innerHTML = '<div class="lb-empty">Waiting for players...</div>'; return; }
+  list.innerHTML = lb.map((p, i) => {
+    const rankClass = i === 0 ? 'gold' : i === 1 ? 'silver' : i === 2 ? 'bronze' : '';
+    const medal = i === 0 ? '🥇' : i === 1 ? '🥈' : i === 2 ? '🥉' : (i+1);
+    const isMe = p.name === myName;
+    const status = p.finished ? '<span class="lb-done">✓ done</span>' : '<span class="lb-pending">in progress</span>';
+    return `<div class="lb-row ${isMe ? 'me' : ''}">
+      <span class="lb-rank ${rankClass}">${medal}</span>
+      <span class="lb-name">${escHtml(p.name)}${isMe ? ' (you)' : ''}</span>
+      <span class="lb-score">${p.score}/20 ${status}</span>
+    </div>`;
+  }).join('');
+}
+
+function updateRankBox(lb) {
+  const box = document.getElementById('result-rank-box');
+  if (!box) return;
+  const me = lb.find(p => p.name === myName);
+  if (!me) return;
+  const total = lb.length;
+  const icons = ['🥇','🥈','🥉'];
+  const icon = me.rank <= 3 ? icons[me.rank-1] : `#${me.rank}`;
+  box.textContent = `${icon} You ranked ${me.rank} out of ${total} player${total !== 1 ? 's' : ''}`;
+}
+
+function escHtml(str) {
+  return str.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+}
+
+// ── JOIN ──────────────────────────────────────────────────
+document.getElementById('name-input').addEventListener('keydown', (e) => {
+  if (e.key === 'Enter') joinQuiz();
+});
+
+function joinQuiz() {
+  const input = document.getElementById('name-input');
+  const name = input.value.trim();
+  if (!name) { input.focus(); input.style.borderColor = '#e07070'; return; }
+  myName = name;
+  socket.emit('join', name);
+  document.getElementById('join-screen').style.display = 'none';
+  document.getElementById('quiz-layout').style.display = 'grid';
+  document.getElementById('pill-name').textContent = '👤 ' + name;
+  render();
+}
+
+// ── QUIZ STATE ─────────────────────────────────────────────
+let current = 0, correct = 0, wrong = 0, skipped = 0;
+let answered = false;
+let startTime = Date.now();
+
+function render() {
+  if (current >= questions.length) { showResult(); return; }
+  const q = questions[current];
+  answered = false;
+
+  document.getElementById('q-type').textContent = q.type;
+  document.getElementById('scenario-box').textContent = q.scenario;
+  document.getElementById('q-text').textContent = q.question;
+  document.getElementById('btn-next').style.display = 'none';
+  document.getElementById('btn-skip').style.display = '';
+  document.getElementById('explanation').className = 'explanation';
+
+  const opts = document.getElementById('options');
+  opts.innerHTML = '';
+  ['A','B','C','D'].forEach((l, i) => {
+    const div = document.createElement('div');
+    div.className = 'opt';
+    div.innerHTML = `<span class="opt-letter">${l}</span><span>${escHtml(q.options[i])}</span>`;
+    div.onclick = () => selectAnswer(i);
+    opts.appendChild(div);
+  });
+
+  updateUI();
+}
+
+function selectAnswer(idx) {
+  if (answered) return;
+  answered = true;
+  const q = questions[current];
+  const opts = document.getElementById('options').children;
+
+  for (let i = 0; i < opts.length; i++) {
+    opts[i].classList.add('locked');
+    if (i === q.answer) opts[i].classList.add('correct');
+    if (i === idx && idx !== q.answer) opts[i].classList.add('selected-wrong');
+  }
+
+  if (idx === q.answer) correct++; else wrong++;
+
+  document.getElementById('explanation').textContent = q.explanation;
+  document.getElementById('explanation').classList.add('show');
+  document.getElementById('btn-next').style.display = '';
+  document.getElementById('btn-skip').style.display = 'none';
+
+  socket.emit('score_update', correct);
+  updateUI();
+}
+
+function nextQuestion() { current++; render(); }
+function skipQuestion() {
+  if (!answered) { skipped++; current++; render(); }
+}
+
+function updateUI() {
+  const pct = Math.max(0, Math.round((current / 20) * 100));
+  document.getElementById('progress-fill').style.width = pct + '%';
+  document.getElementById('pill-q').textContent = `Question ${Math.min(current+1,20)} of 20`;
+  document.getElementById('pill-c').textContent = `✓ ${correct}`;
+  document.getElementById('pill-w').textContent = `✗ ${wrong}`;
+}
+
+function showResult() {
+  const timeTaken = Math.round((Date.now() - startTime) / 1000);
+  socket.emit('submit_score', { score: correct, timeTaken });
+
+  document.getElementById('quiz-screen').style.display = 'none';
+  document.getElementById('result-screen').style.display = 'block';
+  document.getElementById('progress-fill').style.width = '100%';
+
+  const pct = Math.round((correct / 20) * 100);
+  const scoreEl = document.getElementById('result-score');
+  scoreEl.textContent = correct;
+  scoreEl.style.color = pct >= 75 ? '#2d6a4f' : pct >= 60 ? '#b45309' : '#c0392b';
+
+  document.getElementById('result-name').textContent = myName;
+  document.getElementById('rb-c').textContent = correct;
+  document.getElementById('rb-w').textContent = wrong;
+  document.getElementById('rb-s').textContent = skipped;
+
+  let msg;
+  if (pct >= 90) msg = "Excellent! You're ready for the exam.";
+  else if (pct >= 75) msg = "Good job! Review a few weak spots and you'll be set.";
+  else if (pct >= 60) msg = "Passing score — go over the Docker and Kubernetes sections once more.";
+  else msg = "Study the materials again before the exam. You've got this!";
+  document.getElementById('result-msg').textContent = msg;
+
+  // Update rank from current leaderboard
+  updateRankBox(currentLb);
+}
+
+function restartQuiz() {
+  current = 0; correct = 0; wrong = 0; skipped = 0;
+  answered = false; startTime = Date.now();
+  document.getElementById('quiz-screen').style.display = 'block';
+  document.getElementById('result-screen').style.display = 'none';
+  socket.emit('score_update', 0);
+  render();
+}
+</script>
+</body>
+</html>
