@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Container & Cloud Quiz</title>
+<title>Container & Cloud Quiz mga Niga</title>
 <script src="/socket.io/socket.io.js"></script>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
 <style>
@@ -451,7 +451,7 @@ const questions = [
 ];
 
 // ── SOCKET.IO ──────────────────────────────────────────────
-const socket = io();
+const socket = io({ transports: ["websocket"], upgrade: false });
 let myName = '';
 let mySocketId = '';
 let currentLb = [];
